@@ -1,36 +1,21 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# StreamPulse Frontend
 
-## Getting Started
+StreamPulse의 Next.js 프론트엔드입니다. NestJS 백엔드의 로그인 API와 방송 관리 API를 사용합니다.
 
-First, run the development server:
+## 실행
 
 ```bash
+cp .env.example .env.local
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+프론트엔드는 `PORT=3001` 환경변수가 적용된 npm 스크립트를 통해 `http://localhost:3001`에서 실행됩니다. `.env.local`의 `NEXT_PUBLIC_API_URL`에는 브라우저에서 접근할 백엔드 주소를 설정합니다.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8001
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+다른 포트로 일시 실행하려면 npm 스크립트 대신 `PORT=원하는_포트 npx next dev`를 사용할 수 있습니다.
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+로그인하지 않은 사용자는 로그인 화면으로 이동하며, 백엔드 API도 전역 인증 가드로 보호됩니다.
