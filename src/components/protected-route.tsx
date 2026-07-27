@@ -23,6 +23,6 @@ export function ProtectedRoute({ children, adminOnly = false }: { children: Reac
   }, [adminOnly, loading, router, showToast, user]);
 
   if (loading || !user) return <main className="loading-screen">로그인 상태를 확인하고 있습니다.</main>;
-  if (adminOnly && user.role !== "admin") return <main className="loading-screen">방송 모니터로 이동하고 있습니다.</main>;
+  if (adminOnly && user.role !== "admin") return <main className="loading-screen">시청자 프로그램으로 이동하고 있습니다.</main>;
   return children;
 }

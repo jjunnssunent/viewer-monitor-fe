@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "StreamPulse",
-  description: "실시간 멀티 플랫폼 방송 모니터링 서비스",
+  description: "실시간 멀티 플랫폼 시청자 프로그램 서비스",
 };
 
 export default function RootLayout({
