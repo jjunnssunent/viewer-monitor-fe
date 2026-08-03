@@ -31,16 +31,16 @@ export default function LoginPage() {
 
   async function requestLogin(forceLogin = false, target?: "admin" | "user") {
     if (target === "admin") {
-      return apiClient<unknown>("/api/auth/admin/login", { method: "POST", body: JSON.stringify({ loginId, password, forceLogin }) });
+      return apiClient<unknown>("/api/auth/admin/login", { method: "POST", cache: "no-store", body: JSON.stringify({ loginId, password, forceLogin }) });
     }
     if (target === "user") {
-      return apiClient<unknown>("/api/auth/user/login", { method: "POST", body: JSON.stringify({ loginId, password, forceLogin }) });
+      return apiClient<unknown>("/api/auth/user/login", { method: "POST", cache: "no-store", body: JSON.stringify({ loginId, password, forceLogin }) });
     }
     try {
-      return await apiClient<unknown>("/api/auth/user/login", { method: "POST", body: JSON.stringify({ loginId, password, forceLogin }) });
+      return await apiClient<unknown>("/api/auth/user/login", { method: "POST", cache: "no-store", body: JSON.stringify({ loginId, password, forceLogin }) });
     } catch (error) {
       if (!forceLogin && error instanceof ApiError && error.status === 401) {
-        return apiClient<unknown>("/api/auth/admin/login", { method: "POST", body: JSON.stringify({ loginId, password, forceLogin: false }) });
+        return apiClient<unknown>("/api/auth/admin/login", { method: "POST", cache: "no-store", body: JSON.stringify({ loginId, password, forceLogin: false }) });
       }
       throw error;
     }
@@ -60,7 +60,7 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       if (pageMode === "register") {
-        const data = await apiClient<unknown>("/api/auth/register", { method: "POST", body: JSON.stringify({ loginId, password }) });
+        const data = await apiClient<unknown>("/api/auth/register", { method: "POST", cache: "no-store", body: JSON.stringify({ loginId, password }) });
         setAuthenticatedUser(parseAuthUser(data)); showToast("회원가입이 완료되었습니다.", "success"); router.replace("/mypage?registered=1"); router.refresh(); return;
       }
       completeLogin(parseAuthUser(await requestLogin()));

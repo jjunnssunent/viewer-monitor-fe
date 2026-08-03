@@ -59,6 +59,7 @@ async function refreshSession(): Promise<boolean> {
     const response = await fetch(`${API_URL}/api/auth/refresh`, {
       method: "POST",
       credentials: "include",
+      cache: "no-store",
     });
     const data = await readResponse(response);
     if (!response.ok) { refreshFailureMessage = errorMessage(data, "로그인이 만료되었습니다."); return false; }
@@ -92,6 +93,7 @@ export async function apiClient<T>(path: string, options: ApiRequestOptions = {}
       ...requestInit,
       headers,
       credentials: "include",
+      cache: requestInit.cache ?? "no-store",
     });
   } catch (error) {
     throw new ApiError("백엔드 서버에 연결할 수 없습니다.", 0, error);
@@ -101,6 +103,11 @@ export async function apiClient<T>(path: string, options: ApiRequestOptions = {}
     const refreshed = await getRefreshResult();
     if (refreshed) return apiClient<T>(path, { ...requestInit, retry: true });
     expireAuthentication(refreshFailureMessage);
+    throw new ApiError("로그인이 만료되었습니다. 다시 로그인해주세요.", 401);
+  }
+
+  if (response.status === 401 && retry && !NO_AUTO_REFRESH_PATHS.has(path)) {
+    expireAuthentication("로그인이 만료되었습니다. 다시 로그인해주세요.");
     throw new ApiError("로그인이 만료되었습니다. 다시 로그인해주세요.", 401);
   }
 

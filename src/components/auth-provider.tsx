@@ -37,7 +37,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let active = true;
-    apiClient<unknown>("/api/auth/me")
+    apiClient<unknown>("/api/auth/me", { cache: "no-store" })
       .then((data) => {
         if (active) setUser(parseAuthUser(data));
       })
@@ -56,7 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(async () => {
     try {
-      await apiClient("/api/auth/logout", { method: "POST" });
+      await apiClient("/api/auth/logout", { method: "POST", cache: "no-store" });
     } catch {
       // 로컬 인증 상태는 서버 응답 여부와 관계없이 반드시 초기화합니다.
     } finally {
