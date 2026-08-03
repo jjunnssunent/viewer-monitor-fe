@@ -27,7 +27,10 @@ export class ApiError extends Error {
   }
 }
 
-type ApiRequestOptions = RequestInit & { retry?: boolean };
+type ApiRequestOptions = RequestInit & {
+  retry?: boolean;
+  suppressAuthExpired?: boolean;
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -81,7 +84,7 @@ async function getRefreshResult() {
 }
 
 export async function apiClient<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
-  const { retry = false, ...requestInit } = options;
+  const { retry = false, suppressAuthExpired = false, ...requestInit } = options;
   const headers = new Headers(requestInit.headers);
   if (requestInit.body && !(requestInit.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
@@ -101,13 +104,13 @@ export async function apiClient<T>(path: string, options: ApiRequestOptions = {}
 
   if (response.status === 401 && !retry && !NO_AUTO_REFRESH_PATHS.has(path)) {
     const refreshed = await getRefreshResult();
-    if (refreshed) return apiClient<T>(path, { ...requestInit, retry: true });
-    expireAuthentication(refreshFailureMessage);
+    if (refreshed) return apiClient<T>(path, { ...requestInit, retry: true, suppressAuthExpired });
+    if (!suppressAuthExpired) expireAuthentication(refreshFailureMessage);
     throw new ApiError("로그인이 만료되었습니다. 다시 로그인해주세요.", 401);
   }
 
   if (response.status === 401 && retry && !NO_AUTO_REFRESH_PATHS.has(path)) {
-    expireAuthentication("로그인이 만료되었습니다. 다시 로그인해주세요.");
+    if (!suppressAuthExpired) expireAuthentication("로그인이 만료되었습니다. 다시 로그인해주세요.");
     throw new ApiError("로그인이 만료되었습니다. 다시 로그인해주세요.", 401);
   }
 

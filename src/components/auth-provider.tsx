@@ -37,7 +37,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let active = true;
-    apiClient<unknown>("/api/auth/me", { cache: "no-store" })
+    apiClient<unknown>("/api/auth/me", { cache: "no-store", suppressAuthExpired: true })
       .then((data) => {
         if (active) setUser(parseAuthUser(data));
       })
