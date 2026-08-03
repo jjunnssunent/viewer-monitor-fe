@@ -3,7 +3,10 @@ import type { AllowedLink, AuthUser, PlatformId } from "./types";
 const DEFAULT_API_URL = process.env.NODE_ENV === "production"
   ? "https://dev-sp-api.jjunnssun.com"
   : "http://localhost:8001";
-const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? DEFAULT_API_URL).replace(/\/$/, "");
+const API_URL = (process.env.NODE_ENV === "production"
+  ? "/backend-api"
+  : process.env.NEXT_PUBLIC_API_URL ?? DEFAULT_API_URL
+).replace(/\/$/, "");
 const AUTH_EXPIRED_EVENT = "viewer-monitor:auth-expired";
 const AUTH_REFRESHED_EVENT = "viewer-monitor:auth-refreshed";
 const ACCESS_DENIED_EVENT = "viewer-monitor:access-denied";
