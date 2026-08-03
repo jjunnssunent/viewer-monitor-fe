@@ -53,7 +53,7 @@ function canUseViewer(user: { role: "admin" | "user"; usageExpiresAt?: string })
 }
 
 export function MonitorDashboard({ embeddedInAdmin = false }: { embeddedInAdmin?: boolean }) {
-  const { user, logout, setAuthenticatedUser } = useAuth();
+  const { user, loading: authLoading, logout, setAuthenticatedUser } = useAuth();
   const { showToast } = useToast();
   const [platforms, setPlatforms] = useState<Platform[]>([]);
   const [selectedPlatform, setSelectedPlatform] = useState<Platform["id"]>("panda");
@@ -77,6 +77,7 @@ export function MonitorDashboard({ embeddedInAdmin = false }: { embeddedInAdmin?
   const [openingStartedAt, setOpeningStartedAt] = useState<Record<string, number>>({});
 
   const selected = platforms.find((platform) => platform.id === selectedPlatform);
+  const authenticatedUserId = user?.id;
   const viewingMode: ViewingMode = user?.role === "admin" && mode === "personal" ? "shared" : mode;
   const summaryKey = viewingMode === "personal" ? "personal" : viewingMode === "shared" ? "shared" : "";
   const summaryLoading = viewingMode !== "guest" && loadedSummaryKey !== summaryKey;
@@ -119,6 +120,7 @@ export function MonitorDashboard({ embeddedInAdmin = false }: { embeddedInAdmin?
   }, [handleApiError]);
 
   useEffect(() => {
+    if (authLoading || !authenticatedUserId) return;
     let mounted = true;
     async function initialize() {
       try {
@@ -139,7 +141,7 @@ export function MonitorDashboard({ embeddedInAdmin = false }: { embeddedInAdmin?
     return () => {
       mounted = false;
     };
-  }, [handleApiError, refreshSessions]);
+  }, [authLoading, authenticatedUserId, handleApiError, refreshSessions]);
 
   useEffect(() => {
     if (!user) return;
