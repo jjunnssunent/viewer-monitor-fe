@@ -44,17 +44,20 @@ export default function LoginPage() {
   }
 
   async function requestLogin(forceLogin = false, target?: "admin" | "user") {
+    const body = forceLogin
+      ? { loginId, password, forceLogin: true }
+      : { loginId, password };
     if (target === "admin") {
-      return apiClient<unknown>("/api/auth/admin/login", { method: "POST", cache: "no-store", body: JSON.stringify({ loginId, password, forceLogin }) });
+      return apiClient<unknown>("/api/auth/admin/login", { method: "POST", cache: "no-store", body: JSON.stringify(body) });
     }
     if (target === "user") {
-      return apiClient<unknown>("/api/auth/user/login", { method: "POST", cache: "no-store", body: JSON.stringify({ loginId, password, forceLogin }) });
+      return apiClient<unknown>("/api/auth/user/login", { method: "POST", cache: "no-store", body: JSON.stringify(body) });
     }
     try {
-      return await apiClient<unknown>("/api/auth/user/login", { method: "POST", cache: "no-store", body: JSON.stringify({ loginId, password, forceLogin }) });
+      return await apiClient<unknown>("/api/auth/user/login", { method: "POST", cache: "no-store", body: JSON.stringify(body) });
     } catch (error) {
       if (!forceLogin && error instanceof ApiError && error.status === 401) {
-        return apiClient<unknown>("/api/auth/admin/login", { method: "POST", cache: "no-store", body: JSON.stringify({ loginId, password, forceLogin: false }) });
+        return apiClient<unknown>("/api/auth/admin/login", { method: "POST", cache: "no-store", body: JSON.stringify(body) });
       }
       throw error;
     }
@@ -63,7 +66,7 @@ export default function LoginPage() {
   function showRequestError(error: unknown) {
     if (error instanceof ApiError && error.status === 401 && error.message.includes("인증 쿠키")) setMessage(error.message);
     else if (error instanceof ApiError && error.status === 401) setMessage("아이디 또는 비밀번호를 확인해주세요.");
-    else if (error instanceof ApiError && error.status === 0) setMessage("서버에 연결할 수 없습니다.");
+    else if (error instanceof ApiError && error.status === 0) showToast("서버와 연결할 수 없습니다.", "error");
     else setMessage(error instanceof Error ? error.message : "요청을 처리하지 못했습니다.");
   }
 
@@ -94,7 +97,12 @@ export default function LoginPage() {
       await completeLogin(parseAuthUser(await requestLogin(true, takeoverRole))); setTakeoverOpen(false);
       showToast("기존 접속과 시청을 종료하고 현재 위치에서 로그인했습니다.", "success");
     } catch (error) {
-      setTakeoverError(error instanceof Error ? error.message : "기존 접속을 종료하고 로그인하지 못했습니다.");
+      if (error instanceof ApiError && error.status === 0) {
+        showToast("서버와 연결할 수 없습니다.", "error");
+        setTakeoverError("");
+      } else {
+        setTakeoverError(error instanceof Error ? error.message : "기존 접속을 종료하고 로그인하지 못했습니다.");
+      }
     } finally { setTakeoverSubmitting(false); }
   }
 
@@ -107,10 +115,10 @@ export default function LoginPage() {
         <label className="login-label" htmlFor="password">비밀번호</label><input className="login-input" id="password" type="password" autoComplete={pageMode === "register" ? "new-password" : "current-password"} value={password} onChange={(event) => setPassword(event.target.value)} minLength={8} maxLength={200} placeholder="비밀번호를 입력하세요" required />
         {pageMode === "register" && <><label className="login-label" htmlFor="passwordConfirm">비밀번호 확인</label><input className="login-input" id="passwordConfirm" type="password" autoComplete="new-password" value={passwordConfirm} onChange={(event) => setPasswordConfirm(event.target.value)} minLength={8} maxLength={200} placeholder="비밀번호를 다시 입력하세요" required /></>}
         {message && <div className="alert error">{message}</div>}<button className="primary full login-button" disabled={submitting} type="submit">{submitting ? "처리 중..." : pageMode === "login" ? "로그인" : "회원가입"}<span>→</span></button></form><p className="login-security"><span>✓</span> 안전한 HttpOnly 쿠키로 인증됩니다</p></div></section>
-    {takeoverOpen && <Modal title="다른 위치에서 로그인 중" onClose={() => setTakeoverOpen(false)} closeDisabled={takeoverSubmitting}>
-      <div className="login-takeover-dialog"><span className="login-takeover-icon" aria-hidden="true">!</span><div><strong>이미 이 계정으로 접속한 곳이 있습니다.</strong><p>계속하면 기존 기기는 로그아웃되고, 실행 중이거나 시작 대기 중인 모든 방송이 종료됩니다.</p></div></div>
+    {takeoverOpen && <Modal title="이미 로그인 중인 계정입니다" onClose={() => setTakeoverOpen(false)} closeDisabled={takeoverSubmitting}>
+      <div className="login-takeover-dialog"><span className="login-takeover-icon" aria-hidden="true">!</span><div><strong>다른 위치에서 로그인 중입니다.</strong><p>기존 로그인과 시청을 종료하고 새로 로그인하시겠습니까?</p></div></div>
       {takeoverError && <div className="alert error" role="alert">{takeoverError}</div>}
-      <div className="modal-actions login-takeover-actions"><button className="secondary" type="button" disabled={takeoverSubmitting} onClick={() => setTakeoverOpen(false)}>취소</button><button className="primary" type="button" disabled={takeoverSubmitting} onClick={confirmTakeover}>{takeoverSubmitting ? "기존 접속 종료 중..." : "종료하고 로그인"}</button></div>
+      <div className="modal-actions login-takeover-actions"><button className="secondary" type="button" disabled={takeoverSubmitting} onClick={() => setTakeoverOpen(false)}>취소</button><button className="primary" type="button" disabled={takeoverSubmitting} onClick={confirmTakeover}>{takeoverSubmitting ? "기존 접속 종료 중..." : "기존 접속 종료 후 로그인"}</button></div>
     </Modal>}
   </main>;
 }
