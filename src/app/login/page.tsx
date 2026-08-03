@@ -23,7 +23,21 @@ export default function LoginPage() {
   const [takeoverRole, setTakeoverRole] = useState<"admin" | "user">("user");
   useEffect(() => { if (!loading && user && pageMode === "login") router.replace(user.role === "admin" ? "/admin/users" : "/monitor"); }, [loading, pageMode, router, user]);
 
-  function completeLogin(authenticatedUser: AuthUser) {
+  async function completeLogin(loginUser: AuthUser) {
+    let authenticatedUser: AuthUser;
+    try {
+      const verified = parseAuthUser(await apiClient<unknown>("/api/auth/me", {
+        cache: "no-store",
+        suppressAuthExpired: true,
+      }));
+      if (verified.id !== loginUser.id) throw new ApiError("로그인 응답과 현재 인증 세션이 일치하지 않습니다.", 401);
+      authenticatedUser = verified;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        throw new ApiError("로그인은 처리됐지만 인증 쿠키가 유지되지 않았습니다. 브라우저 쿠키 설정을 확인해주세요.", 401, error.data);
+      }
+      throw error;
+    }
     setAuthenticatedUser(authenticatedUser);
     router.replace(authenticatedUser.role === "admin" ? "/admin/users" : "/monitor");
     router.refresh();
@@ -47,7 +61,8 @@ export default function LoginPage() {
   }
 
   function showRequestError(error: unknown) {
-    if (error instanceof ApiError && error.status === 401) setMessage("아이디 또는 비밀번호를 확인해주세요.");
+    if (error instanceof ApiError && error.status === 401 && error.message.includes("인증 쿠키")) setMessage(error.message);
+    else if (error instanceof ApiError && error.status === 401) setMessage("아이디 또는 비밀번호를 확인해주세요.");
     else if (error instanceof ApiError && error.status === 0) setMessage("서버에 연결할 수 없습니다.");
     else setMessage(error instanceof Error ? error.message : "요청을 처리하지 못했습니다.");
   }
@@ -63,7 +78,7 @@ export default function LoginPage() {
         const data = await apiClient<unknown>("/api/auth/register", { method: "POST", cache: "no-store", body: JSON.stringify({ loginId, password }) });
         setAuthenticatedUser(parseAuthUser(data)); showToast("회원가입이 완료되었습니다.", "success"); router.replace("/mypage?registered=1"); router.refresh(); return;
       }
-      completeLogin(parseAuthUser(await requestLogin()));
+      await completeLogin(parseAuthUser(await requestLogin()));
     } catch (error) {
       const conflictRole = activeSessionConflictRole(error);
       if (conflictRole) { setTakeoverRole(conflictRole); setTakeoverError(""); setTakeoverOpen(true); }
@@ -76,7 +91,7 @@ export default function LoginPage() {
   async function confirmTakeover() {
     if (takeoverSubmitting) return; setTakeoverSubmitting(true); setTakeoverError("");
     try {
-      completeLogin(parseAuthUser(await requestLogin(true, takeoverRole))); setTakeoverOpen(false);
+      await completeLogin(parseAuthUser(await requestLogin(true, takeoverRole))); setTakeoverOpen(false);
       showToast("기존 접속과 시청을 종료하고 현재 위치에서 로그인했습니다.", "success");
     } catch (error) {
       setTakeoverError(error instanceof Error ? error.message : "기존 접속을 종료하고 로그인하지 못했습니다.");
