@@ -109,7 +109,10 @@ export function MonitorDashboard({ embeddedInAdmin = false }: { embeddedInAdmin?
 
   const refreshSessions = useCallback(async () => {
     try {
-      const response = await apiClient<Session[]>("/api/viewers", { cache: "no-store" });
+      const response = await apiClient<Session[]>("/api/viewers", {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-store" },
+      });
       const nextSessions = response.filter((session) => session.status !== "stopped");
       if (nextSessions.some((session) => session.mode === "account")) setAccountBatchLocked(true);
       setOpeningStartedAt((current) => { const next: Record<string, number> = {}; const now = Date.now(); for (const session of nextSessions) if (session.status === "opening_broadcast") next[session.sessionId] = current[session.sessionId] ?? now; return next; });
@@ -263,7 +266,12 @@ export function MonitorDashboard({ embeddedInAdmin = false }: { embeddedInAdmin?
     if (stoppingAll) return;
     setStoppingAll(true);
     try {
-      const results = await Promise.allSettled(stoppableSessions.map(async (session) => { await apiClient(`/api/viewers/${session.sessionId}`, { method: "DELETE", cache: "no-store" }); setSessions((current) => current.filter((item) => item.sessionId !== session.sessionId)); setOpeningStartedAt((current) => { const next = { ...current }; delete next[session.sessionId]; return next; }); }));
+      const latestSessions = (await apiClient<Session[]>("/api/viewers", {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-store" },
+      })).filter((session) => session.status !== "stopped");
+      setSessions(latestSessions);
+      const results = await Promise.allSettled(latestSessions.map(async (session) => { await apiClient(`/api/viewers/${session.sessionId}`, { method: "DELETE", cache: "no-store" }); setSessions((current) => current.filter((item) => item.sessionId !== session.sessionId)); setOpeningStartedAt((current) => { const next = { ...current }; delete next[session.sessionId]; return next; }); }));
       const failure = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
       if (failure) showToast(handleApiError(failure.reason, "일부 세션을 종료하지 못했습니다."), "error");
       else { setAccountBatchLocked(false); showToast("전체 시청을 종료했습니다.", "success"); }
