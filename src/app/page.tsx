@@ -23,7 +23,7 @@ type Session = {
   accountSource?: "personal" | "shared";
   accountLabel: string;
   broadcastUrl: string;
-  status: string;
+  status: "queued" | "launching" | "signing_in" | "manual_auth" | "opening_broadcast" | "watching" | "ended" | "error" | "stopped";
   message: string;
 };
 
@@ -73,6 +73,7 @@ export function MonitorDashboard({ embeddedInAdmin = false }: { embeddedInAdmin?
   const [errorMessage, setErrorMessage] = useState("");
   const [starting, setStarting] = useState(false);
   const [accountBatchLocked, setAccountBatchLocked] = useState(false);
+  const [guestBatchLocked, setGuestBatchLocked] = useState(false);
   const [stoppingAll, setStoppingAll] = useState(false);
   const [stoppingSessions, setStoppingSessions] = useState<Set<string>>(new Set());
   const [retryingSessions, setRetryingSessions] = useState<Set<string>>(new Set());
@@ -97,7 +98,7 @@ export function MonitorDashboard({ embeddedInAdmin = false }: { embeddedInAdmin?
     [sessions],
   );
   const stoppableSessions = useMemo(
-    () => sessions.filter((session) => session.status !== "stopped"),
+    () => sessions.filter((session) => session.status !== "stopped" && session.status !== "ended"),
     [sessions],
   );
 
@@ -118,6 +119,7 @@ export function MonitorDashboard({ embeddedInAdmin = false }: { embeddedInAdmin?
       });
       const nextSessions = response.filter((session) => session.status !== "stopped");
       if (nextSessions.some((session) => session.mode === "account")) setAccountBatchLocked(true);
+      if (nextSessions.some((session) => session.mode === "guest")) setGuestBatchLocked(true);
       setOpeningStartedAt((current) => { const next: Record<string, number> = {}; const now = Date.now(); for (const session of nextSessions) if (session.status === "opening_broadcast") next[session.sessionId] = current[session.sessionId] ?? now; return next; });
       setSessions(nextSessions);
     } catch (error) {
@@ -125,6 +127,7 @@ export function MonitorDashboard({ embeddedInAdmin = false }: { embeddedInAdmin?
         setSessions([]);
         setOpeningStartedAt({});
         setAccountBatchLocked(false);
+        setGuestBatchLocked(false);
         setErrorMessage("");
         return;
       }
@@ -201,6 +204,7 @@ export function MonitorDashboard({ embeddedInAdmin = false }: { embeddedInAdmin?
       return;
     }
     if (isAccountMode && accountBatchLocked) { setStartMessage("계정 로그인 시청이 이미 실행 중입니다. 전체 종료 후 다시 시작해주세요."); return; }
+    if (viewingMode === "guest" && guestBatchLocked) { setStartMessage("비로그인 시청이 이미 실행 중입니다. 전체 종료 후 다시 시작해주세요."); return; }
     if (platformUnavailable) { showToast("개발 예정입니다."); return; }
     if (!valuesValid) {
       setStartMessage("실행 간격과 실행 개수를 다시 선택해주세요.");
@@ -224,6 +228,7 @@ export function MonitorDashboard({ embeddedInAdmin = false }: { embeddedInAdmin?
       const body = isAccountMode ? { ...common, accountsPerInterval: PER_INTERVAL, totalAccounts: totalCount } : { ...common, viewersPerInterval: PER_INTERVAL, totalViewers: totalCount };
       await apiClient(path, { method: "POST", cache: "no-store", body: JSON.stringify(body) });
       if (isAccountMode) setAccountBatchLocked(true);
+      else setGuestBatchLocked(true);
       setStartMessage(`1개를 즉시 시작하고 이후 ${intervalLabel(intervalSeconds)}마다 1개씩 추가합니다.`);
       if (user.role === "admin") localStorage.setItem(`lastBroadcastUrl:${selectedPlatform}`, broadcastUrl.trim());
       await refreshSessions();
@@ -281,10 +286,11 @@ export function MonitorDashboard({ embeddedInAdmin = false }: { embeddedInAdmin?
         headers: { "Cache-Control": "no-store" },
       })).filter((session) => session.status !== "stopped");
       setSessions(latestSessions);
-      const results = await Promise.allSettled(latestSessions.map(async (session) => { await apiClient(`/api/viewers/${session.sessionId}`, { method: "DELETE", cache: "no-store" }); setSessions((current) => current.filter((item) => item.sessionId !== session.sessionId)); setOpeningStartedAt((current) => { const next = { ...current }; delete next[session.sessionId]; return next; }); }));
+      const sessionsToStop = latestSessions.filter((session) => session.status !== "ended");
+      const results = await Promise.allSettled(sessionsToStop.map(async (session) => { await apiClient(`/api/viewers/${session.sessionId}`, { method: "DELETE", cache: "no-store" }); setSessions((current) => current.filter((item) => item.sessionId !== session.sessionId)); setOpeningStartedAt((current) => { const next = { ...current }; delete next[session.sessionId]; return next; }); }));
       const failure = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
       if (failure) showToast(handleApiError(failure.reason, "일부 세션을 종료하지 못했습니다."), "error");
-      else { setAccountBatchLocked(false); showToast("전체 시청을 종료했습니다.", "success"); }
+      else { setAccountBatchLocked(false); setGuestBatchLocked(false); showToast("전체 시청을 종료했습니다.", "success"); }
       await refreshSessions();
     } finally {
       setStoppingAll(false);
@@ -378,10 +384,11 @@ export function MonitorDashboard({ embeddedInAdmin = false }: { embeddedInAdmin?
               <div className="viewer-start-fields"><CustomSelect label="실행 간격" value={intervalSeconds} options={intervalOptions} onChange={setIntervalSeconds} /><CustomSelect label={isAccountMode ? "전체 실행 계정 수" : "전체 실행 시청 수"} value={totalCount} options={totalOptions} onChange={setTotalCount} /></div>
               <div className={`execution-preview ${valuesValid && !accountCountInsufficient ? "" : "invalid"}`}>{!valuesValid ? isAccountMode && availableAccountCount === 0 ? "등록된 계정이 없어 실행할 수 없습니다." : "전체 실행 개수를 선택해주세요." : accountCountInsufficient ? `${totalCount}개 실행에 필요한 계정이 부족합니다.` : `1개를 즉시 시작하고 이후 ${intervalLabel(intervalSeconds)}마다 1개씩 추가합니다.`}</div>
               {isAccountMode && accountBatchLocked && <div className="alert warning">계정 로그인 시청이 이미 실행 중입니다. 새로운 시청은 전체 종료 후 시작할 수 있습니다.</div>}
+              {viewingMode === "guest" && guestBatchLocked && <div className="alert warning">비로그인 시청이 이미 실행 중입니다. 새로운 시청은 전체 종료 후 시작할 수 있습니다.</div>}
               <button
                 className="primary full"
                 type="button"
-                disabled={starting || (isAccountMode && accountBatchLocked) || platformUnavailable || !user || !canUseViewer(user) || !valuesValid || (isAccountMode && summaryLoading) || accountCountInsufficient || (user.role === "admin" && !broadcastUrl.trim())}
+                disabled={starting || (isAccountMode && accountBatchLocked) || (viewingMode === "guest" && guestBatchLocked) || platformUnavailable || !user || !canUseViewer(user) || !valuesValid || (isAccountMode && summaryLoading) || accountCountInsufficient || (user.role === "admin" && !broadcastUrl.trim())}
                 onClick={() => void startWatching()}
               >
                 {starting ? "시작 중..." : viewingMode === "personal" ? "내 계정 로그인 시청 시작" : viewingMode === "shared" ? "공용 계정 로그인 시청 시작" : "비로그인 시청 시작"}
@@ -396,14 +403,14 @@ export function MonitorDashboard({ embeddedInAdmin = false }: { embeddedInAdmin?
           <section className="sessions-section">
             <div className="section-head">
               <div><h2>시청 현황</h2><span className="muted">방송 종료 시 브라우저와 세션을 자동으로 정리합니다.</span></div>
-              <button className="secondary" type="button" disabled={!stoppableSessions.length || stoppingAll} onClick={() => void stopAll()}>{stoppingAll ? "종료 중..." : "전체 종료"}</button>
+              <button className="secondary" type="button" disabled={(!stoppableSessions.length && !accountBatchLocked && !guestBatchLocked) || stoppingAll} onClick={() => void stopAll()}>{stoppingAll ? "종료 중..." : "전체 종료"}</button>
             </div>
             <div className="sessions">
               {visibleSessions.length ? visibleSessions.map((session) => { const displayMessage = sessionDisplayMessage(session, openingStartedAt[session.sessionId]); const technicalError = session.status === "error" && technicalErrorPattern.test(session.message); return (
                 <article className={`session ${session.status}`} key={session.sessionId}>
                   <div className="session-title"><span className={`status-dot ${session.status}`} /><span>{platforms.find((platform) => platform.id === session.platform)?.name} · {sessionSourceLabel(session)} · {session.accountLabel} · {statusLabel(session.status)}</span></div>
                   <div className="session-message">{displayMessage}{technicalError && process.env.NODE_ENV === "development" && <details className="session-error-detail"><summary>상세 오류 보기</summary><pre>{session.message}</pre></details>}</div>
-                  <div className="session-actions">{session.status === "error" && <button className="secondary" type="button" disabled={retryingSessions.has(session.sessionId) || stoppingSessions.has(session.sessionId)} onClick={() => void retrySession(session)}>{retryingSessions.has(session.sessionId) ? "재시도 중..." : "다시 시도"}</button>}<button className="danger" type="button" disabled={stoppingSessions.has(session.sessionId) || retryingSessions.has(session.sessionId) || session.status === "stopped"} onClick={() => void stopSession(session.sessionId)}>{stoppingSessions.has(session.sessionId) ? "처리 중..." : session.status === "ended" ? "정리" : session.status === "stopped" ? "종료됨" : "종료"}</button></div>
+                  <div className="session-actions">{session.status === "error" && <button className="secondary" type="button" disabled={retryingSessions.has(session.sessionId) || stoppingSessions.has(session.sessionId)} onClick={() => void retrySession(session)}>{retryingSessions.has(session.sessionId) ? "재시도 중..." : "다시 시도"}</button>}{session.status !== "ended" && session.status !== "stopped" && <button className="danger" type="button" disabled={stoppingSessions.has(session.sessionId) || retryingSessions.has(session.sessionId)} onClick={() => void stopSession(session.sessionId)}>{stoppingSessions.has(session.sessionId) ? "처리 중..." : "종료"}</button>}</div>
                 </article>
               ); }) : <div className="session-empty">실행 중인 화면이 없습니다.</div>}
             </div>
@@ -424,9 +431,9 @@ function statusLabel(status: string) {
     signing_in: "플랫폼 계정 로그인 중",
     manual_auth: "플랫폼 로그인 확인 필요",
     opening_broadcast: "방송 입장 중",
-    watching: "입장 완료",
+    watching: "시청 중",
     ended: "방송 종료",
-    error: "플랫폼 방송 오류",
+    error: "오류",
     stopped: "종료됨",
   };
   return labels[status] ?? status;
@@ -454,6 +461,7 @@ function sessionDisplayMessage(session: Session, openingStartedAt?: number) {
     if (elapsed >= 30_000) return "방송 페이지가 다시 로딩되어 재생을 재시도하고 있습니다.";
     return "방송에 입장하고 있습니다.";
   }
+  if (session.status === "ended") return session.message;
   if (session.status === "watching") return technicalErrorPattern.test(session.message) ? "방송 입장이 완료되었습니다." : session.message;
   if (technicalErrorPattern.test(session.message)) return "방송 입장 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.";
   return session.message;

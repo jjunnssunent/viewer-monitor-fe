@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiClient, ApiError, parseAuthUser, subscribeToAccessDenied, subscribeToAuthExpired, subscribeToAuthRefreshed } from "@/lib/api-client";
 import type { AuthUser } from "@/lib/types";
@@ -22,25 +22,52 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const authExpirationHandledRef = useRef(false);
   const router = useRouter();
   const { showToast } = useToast();
 
-  useEffect(() => subscribeToAuthExpired((message) => {
-    setUser(null);
-    setLoading(false);
-    const usageExpired = message?.includes("이용기간") || message?.includes("usage period");
-    showToast(usageExpired ? "서비스 이용기간이 만료되었습니다. 관리자에게 문의해주세요." : "로그인이 만료되었습니다. 다시 로그인해주세요.", "error");
-    router.replace("/login");
-  }), [router, showToast]);
+  useEffect(() => {
+    const unsubscribe = subscribeToAuthExpired((message) => {
+      if (authExpirationHandledRef.current) return;
+      authExpirationHandledRef.current = true;
 
-  useEffect(() => subscribeToAuthRefreshed((refreshedUser) => setUser(refreshedUser)), []);
-  useEffect(() => subscribeToAccessDenied((path) => { if (!path.startsWith("/api/viewers")) showToast(path === "/api/users/me/links" ? "이용기간 또는 허용 방송 링크를 확인해주세요." : "접근 권한이 없습니다.", "error"); }), [showToast]);
+      setUser(null);
+      setLoading(false);
+      const usageExpired = message?.includes("이용기간") || message?.includes("usage period");
+      showToast(usageExpired ? "서비스 이용기간이 만료되었습니다. 관리자에게 문의해주세요." : "로그인이 만료되었습니다. 다시 로그인해주세요.", "error");
+      router.replace("/login");
+    });
+
+    return unsubscribe;
+  }, [router, showToast]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToAuthRefreshed((refreshedUser) => {
+      authExpirationHandledRef.current = false;
+      setUser(refreshedUser);
+    });
+
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToAccessDenied((path) => {
+      if (!path.startsWith("/api/viewers")) {
+        showToast(path === "/api/users/me/links" ? "이용기간 또는 허용 방송 링크를 확인해주세요." : "접근 권한이 없습니다.", "error");
+      }
+    });
+
+    return unsubscribe;
+  }, [showToast]);
 
   useEffect(() => {
     let active = true;
     apiClient<unknown>("/api/auth/me", { cache: "no-store", suppressAuthExpired: true })
       .then((data) => {
-        if (active) setUser(parseAuthUser(data));
+        if (active) {
+          authExpirationHandledRef.current = false;
+          setUser(parseAuthUser(data));
+        }
       })
       .catch((error) => {
         if (!active) return;
@@ -68,6 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   const setAuthenticatedUser = useCallback((nextUser: AuthUser) => {
+    authExpirationHandledRef.current = false;
     setUser(nextUser);
     setLoading(false);
   }, []);
