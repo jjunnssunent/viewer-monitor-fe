@@ -161,9 +161,11 @@ export function MonitorDashboard({ embeddedInAdmin = false }: { embeddedInAdmin?
 
   useEffect(() => {
     if (!user) return;
-    const timer = window.setInterval(() => void refreshSessions(), 3000);
+    const pollingInterval = sessionPollingInterval(sessions);
+    if (pollingInterval === null) return;
+    const timer = window.setInterval(() => void refreshSessions(), pollingInterval);
     return () => window.clearInterval(timer);
-  }, [refreshSessions, user]);
+  }, [refreshSessions, sessions, user]);
 
   useEffect(() => {
     if (!user || viewingMode === "guest" || (viewingMode === "personal" && user.role !== "user")) return;
@@ -437,6 +439,15 @@ function statusLabel(status: string) {
     stopped: "종료됨",
   };
   return labels[status] ?? status;
+}
+
+function sessionPollingInterval(sessions: Session[]): number | null {
+  if (sessions.some((session) => ["queued", "launching", "signing_in", "manual_auth", "opening_broadcast"].includes(session.status))) {
+    return 3_000;
+  }
+  if (sessions.some((session) => session.status === "watching")) return 10_000;
+  if (sessions.length === 0 || sessions.every((session) => ["ended", "stopped", "error"].includes(session.status))) return null;
+  return 3_000;
 }
 
 function intervalLabel(seconds: number) {
