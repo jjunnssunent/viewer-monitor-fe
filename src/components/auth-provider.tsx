@@ -30,7 +30,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(false);
     const usageExpired = message?.includes("이용기간") || message?.includes("usage period");
     showToast(usageExpired ? "서비스 이용기간이 만료되었습니다. 관리자에게 문의해주세요." : "로그인이 만료되었습니다. 다시 로그인해주세요.", "error");
-  }), [showToast]);
+    router.replace("/login");
+  }), [router, showToast]);
 
   useEffect(() => subscribeToAuthRefreshed((refreshedUser) => setUser(refreshedUser)), []);
   useEffect(() => subscribeToAccessDenied((path) => { if (!path.startsWith("/api/viewers")) showToast(path === "/api/users/me/links" ? "이용기간 또는 허용 방송 링크를 확인해주세요." : "접근 권한이 없습니다.", "error"); }), [showToast]);

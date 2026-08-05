@@ -56,7 +56,6 @@ async function readResponse(response: Response): Promise<unknown> {
 function expireAuthentication(message?: string | null) {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent<string | null>(AUTH_EXPIRED_EVENT, { detail: message ?? null }));
-  if (window.location.pathname !== "/login") window.location.assign("/login");
 }
 
 async function refreshSession(): Promise<boolean> {

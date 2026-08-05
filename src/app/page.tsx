@@ -118,6 +118,13 @@ export function MonitorDashboard({ embeddedInAdmin = false }: { embeddedInAdmin?
       setOpeningStartedAt((current) => { const next: Record<string, number> = {}; const now = Date.now(); for (const session of nextSessions) if (session.status === "opening_broadcast") next[session.sessionId] = current[session.sessionId] ?? now; return next; });
       setSessions(nextSessions);
     } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        setSessions([]);
+        setOpeningStartedAt({});
+        setAccountBatchLocked(false);
+        setErrorMessage("");
+        return;
+      }
       handleApiError(error, "세션을 불러오지 못했습니다.");
     }
   }, [handleApiError]);
@@ -411,12 +418,12 @@ function statusLabel(status: string) {
   const labels: Record<string, string> = {
     queued: "시작 대기",
     launching: "브라우저 실행 중",
-    signing_in: "로그인 중",
-    manual_auth: "확인 필요",
+    signing_in: "플랫폼 계정 로그인 중",
+    manual_auth: "플랫폼 로그인 확인 필요",
     opening_broadcast: "방송 입장 중",
     watching: "입장 완료",
     ended: "방송 종료",
-    error: "오류",
+    error: "플랫폼 방송 오류",
     stopped: "종료됨",
   };
   return labels[status] ?? status;
