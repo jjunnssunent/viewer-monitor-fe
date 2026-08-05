@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { useAuth } from "@/components/auth-provider";
@@ -79,6 +79,7 @@ export function MonitorDashboard({ embeddedInAdmin = false }: { embeddedInAdmin?
   const [retryingSessions, setRetryingSessions] = useState<Set<string>>(new Set());
   const [loggingOut, setLoggingOut] = useState(false);
   const [openingStartedAt, setOpeningStartedAt] = useState<Record<string, number>>({});
+  const notifiedEndedIdsRef = useRef(new Set<string>());
 
   const selected = platforms.find((platform) => platform.id === selectedPlatform);
   const authenticatedUserId = user?.id;
@@ -94,11 +95,11 @@ export function MonitorDashboard({ embeddedInAdmin = false }: { embeddedInAdmin?
   const valuesValid = intervalOptions.some((option) => option.value === intervalSeconds) && totalOptions.some((option) => option.value === totalCount);
   const accountCountInsufficient = isAccountMode && !summaryLoading && totalCount > availableAccountCount;
   const visibleSessions = useMemo(
-    () => sessions.filter((session) => session.status !== "stopped"),
+    () => sessions.filter((session) => session.status !== "ended" && session.status !== "stopped"),
     [sessions],
   );
   const stoppableSessions = useMemo(
-    () => sessions.filter((session) => session.status !== "stopped" && session.status !== "ended"),
+    () => sessions.filter((session) => session.status !== "ended" && session.status !== "stopped"),
     [sessions],
   );
 
@@ -117,7 +118,13 @@ export function MonitorDashboard({ embeddedInAdmin = false }: { embeddedInAdmin?
         cache: "no-store",
         headers: { "Cache-Control": "no-store" },
       });
-      const nextSessions = response.filter((session) => session.status !== "stopped");
+      for (const session of response) {
+        if (session.status === "ended" && !notifiedEndedIdsRef.current.has(session.sessionId)) {
+          notifiedEndedIdsRef.current.add(session.sessionId);
+          showToast("방송이 종료되어 시청을 종료했습니다.", "info");
+        }
+      }
+      const nextSessions = response.filter((session) => session.status !== "ended" && session.status !== "stopped");
       if (nextSessions.some((session) => session.mode === "account")) setAccountBatchLocked(true);
       if (nextSessions.some((session) => session.mode === "guest")) setGuestBatchLocked(true);
       setOpeningStartedAt((current) => { const next: Record<string, number> = {}; const now = Date.now(); for (const session of nextSessions) if (session.status === "opening_broadcast") next[session.sessionId] = current[session.sessionId] ?? now; return next; });
@@ -133,7 +140,7 @@ export function MonitorDashboard({ embeddedInAdmin = false }: { embeddedInAdmin?
       }
       handleApiError(error, "세션을 불러오지 못했습니다.");
     }
-  }, [handleApiError]);
+  }, [handleApiError, showToast]);
 
   useEffect(() => {
     if (authLoading || !authenticatedUserId) return;
@@ -286,10 +293,9 @@ export function MonitorDashboard({ embeddedInAdmin = false }: { embeddedInAdmin?
       const latestSessions = (await apiClient<Session[]>("/api/viewers", {
         cache: "no-store",
         headers: { "Cache-Control": "no-store" },
-      })).filter((session) => session.status !== "stopped");
+      })).filter((session) => session.status !== "ended" && session.status !== "stopped");
       setSessions(latestSessions);
-      const sessionsToStop = latestSessions.filter((session) => session.status !== "ended");
-      const results = await Promise.allSettled(sessionsToStop.map(async (session) => { await apiClient(`/api/viewers/${session.sessionId}`, { method: "DELETE", cache: "no-store" }); setSessions((current) => current.filter((item) => item.sessionId !== session.sessionId)); setOpeningStartedAt((current) => { const next = { ...current }; delete next[session.sessionId]; return next; }); }));
+      const results = await Promise.allSettled(latestSessions.map(async (session) => { await apiClient(`/api/viewers/${session.sessionId}`, { method: "DELETE", cache: "no-store" }); setSessions((current) => current.filter((item) => item.sessionId !== session.sessionId)); setOpeningStartedAt((current) => { const next = { ...current }; delete next[session.sessionId]; return next; }); }));
       const failure = results.find((result): result is PromiseRejectedResult => result.status === "rejected");
       if (failure) showToast(handleApiError(failure.reason, "일부 세션을 종료하지 못했습니다."), "error");
       else { setAccountBatchLocked(false); setGuestBatchLocked(false); showToast("전체 시청을 종료했습니다.", "success"); }
@@ -414,7 +420,7 @@ export function MonitorDashboard({ embeddedInAdmin = false }: { embeddedInAdmin?
                   <div className="session-message">{displayMessage}{technicalError && process.env.NODE_ENV === "development" && <details className="session-error-detail"><summary>상세 오류 보기</summary><pre>{session.message}</pre></details>}</div>
                   <div className="session-actions">{session.status === "error" && <button className="secondary" type="button" disabled={retryingSessions.has(session.sessionId) || stoppingSessions.has(session.sessionId)} onClick={() => void retrySession(session)}>{retryingSessions.has(session.sessionId) ? "재시도 중..." : "다시 시도"}</button>}{session.status !== "ended" && session.status !== "stopped" && <button className="danger" type="button" disabled={stoppingSessions.has(session.sessionId) || retryingSessions.has(session.sessionId)} onClick={() => void stopSession(session.sessionId)}>{stoppingSessions.has(session.sessionId) ? "처리 중..." : "종료"}</button>}</div>
                 </article>
-              ); }) : <div className="session-empty">실행 중인 화면이 없습니다.</div>}
+              ); }) : <div className="session-empty">현재 시청 중인 방송이 없습니다.</div>}
             </div>
           </section>
 
