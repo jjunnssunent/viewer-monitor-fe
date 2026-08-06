@@ -30,7 +30,7 @@ type Session = {
 type ViewingMode = "personal" | "shared" | "guest";
 type AccountSummary = { platform: PlatformId; count: number };
 const PER_INTERVAL = 1;
-const intervalOptions = [{ value: 10, label: "10초" }, { value: 20, label: "20초" }, { value: 30, label: "30초" }, { value: 40, label: "40초" }, { value: 50, label: "50초" }, { value: 60, label: "1분" }, { value: 120, label: "2분" }, { value: 180, label: "3분" }, { value: 240, label: "4분" }, { value: 300, label: "5분" }, { value: 600, label: "10분" }];
+const intervalOptions = [{ value: 3, label: "3초" }, { value: 5, label: "5초" }, { value: 10, label: "10초" }, { value: 20, label: "20초" }, { value: 30, label: "30초" }, { value: 40, label: "40초" }, { value: 50, label: "50초" }, { value: 60, label: "1분" }, { value: 120, label: "2분" }, { value: 180, label: "3분" }, { value: 240, label: "4분" }, { value: 300, label: "5분" }, { value: 600, label: "10분" }];
 const guestTotalOptions = Array.from({ length: 30 }, (_, index) => ({
   value: index + 1,
   label: `${index + 1}개`,
@@ -209,7 +209,7 @@ export function MonitorDashboard({ embeddedInAdmin = false }: { embeddedInAdmin?
 
   async function startWatching() {
     if (!user || !canUseViewer(user)) {
-      setStartMessage("이용기간이 만료되었거나 아직 결제가 완료되지 않았습니다.");
+      setStartMessage("이용기간이 만료되었습니다. 관리자에게 문의해주세요.");
       return;
     }
     if (isAccountMode && accountBatchLocked) { setStartMessage("계정 로그인 시청이 이미 실행 중입니다. 전체 종료 후 다시 시작해주세요."); return; }
@@ -387,7 +387,7 @@ export function MonitorDashboard({ embeddedInAdmin = false }: { embeddedInAdmin?
               {platformUnavailable ? <div className="monitor-coming-soon"><span className={`platform-logo ${selectedPlatform}`}>{platformIcons[selectedPlatform]}</span><strong>{selected?.name ?? platformNames[selectedPlatform]}</strong><p>개발 예정입니다.<br />플랫폼 어댑터가 준비되면 사용할 수 있습니다.</p></div> : <>
               <p className="muted">{isAccountMode ? "등록된 플랫폼 계정을 실행 간격에 맞춰 순차적으로 시작합니다." : "비로그인 시청 화면을 실행 간격에 맞춰 순차적으로 시작합니다."}</p>
               {user?.role === "admin" && <label className="field-label">방송 주소<input className="field" type="url" value={broadcastUrl} onChange={(event) => setBroadcastUrl(event.target.value)} placeholder="방송 URL을 입력하세요" /></label>}
-              {user?.role === "user" && !canUseViewer(user) && <div className="usage-expired-panel"><strong>이용기간이 만료되었거나 아직 결제가 완료되지 않았습니다.</strong><span>이용권 결제가 완료되면 시청자 프로그램을 사용할 수 있습니다.</span><button className="secondary" type="button" onClick={() => showToast("결제 기능은 준비 중입니다.")}>이용권 결제하기</button></div>}
+              {user?.role === "user" && !canUseViewer(user) && <div className="usage-expired-panel"><strong>이용기간이 만료되었습니다.</strong><span>서비스 이용을 계속하려면 관리자에게 문의해주세요.</span><a className="button-link secondary" href="https://pf.kakao.com/_HfeFxj/chat" target="_blank" rel="noopener noreferrer">관리자에게 문의하기</a></div>}
               {isAccountMode && <div className={`account-availability ${availableAccountCount ? "available" : "empty"}`}><strong>{summaryLoading ? "계정 수 확인 중..." : viewingMode === "personal" ? `사용 가능한 내 계정 ${availableAccountCount}개` : `사용 가능한 공용 계정 ${availableAccountCount}개`}</strong>{!summaryLoading && availableAccountCount === 0 && <span>{viewingMode === "personal" ? `등록된 ${platformNames[selectedPlatform]} 계정이 없습니다.` : `관리자가 등록한 ${platformNames[selectedPlatform]} 공용 계정이 없습니다.`}</span>}{viewingMode === "personal" && !summaryLoading && availableAccountCount === 0 && <Link className="button-link secondary compact" href={`/mypage/platform-accounts?platform=${selectedPlatform}`}>내 계정 등록하기</Link>}</div>}
               <div className="viewer-start-fields"><CustomSelect label="실행 간격" value={intervalSeconds} options={intervalOptions} onChange={setIntervalSeconds} /><CustomSelect label={isAccountMode ? "전체 실행 계정 수" : "전체 실행 시청 수"} value={totalCount} options={totalOptions} onChange={setTotalCount} /></div>
               <div className={`execution-preview ${valuesValid && !accountCountInsufficient ? "" : "invalid"}`}>{!valuesValid ? isAccountMode && availableAccountCount === 0 ? "등록된 계정이 없어 실행할 수 없습니다." : "전체 실행 개수를 선택해주세요." : accountCountInsufficient ? `${totalCount}개 실행에 필요한 계정이 부족합니다.` : `1개를 즉시 시작하고 이후 ${intervalLabel(intervalSeconds)}마다 1개씩 추가합니다.`}</div>
