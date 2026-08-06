@@ -58,3 +58,17 @@ export type Administrator = {
   lastLoginAt: string | null;
   createdBy: string | null;
 };
+
+export type PaymentType = "card" | "bank_transfer" | "cash" | "virtual_account" | "other";
+
+export type UserPayment = {
+  id: string;
+  userId: string;
+  amount: number;
+  paymentType: PaymentType;
+  bankName: string | null;
+  paidAt: string;
+  memo: string | null;
+  createdAt: string;
+  updatedAt: string;
+};

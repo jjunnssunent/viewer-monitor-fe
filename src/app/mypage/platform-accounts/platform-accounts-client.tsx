@@ -1,6 +1,6 @@
 "use client";
 
-import { DragEvent, useCallback, useEffect, useRef, useState } from "react";
+import { DragEvent, FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiClient, ApiError } from "@/lib/api-client";
 import { downloadPlatformAccountTemplate } from "@/lib/platform-account-template";
@@ -205,10 +205,66 @@ export function MyPlatformAccounts({ initialPlatform, scope = "user" }: { initia
 
     <section className="platform-upload-card"><div><h2>{platformMeta[selected].name} 계정 업로드</h2><p>첫 시트의 A1은 <code>id</code>, B1은 <code>password</code>로 작성하고 데이터는 2행부터 입력해주세요.</p></div><label className={`platform-upload-zone ${dragging ? "dragging" : ""}`} onDragEnter={(event) => { event.preventDefault(); setDragging(true); }} onDragOver={(event) => event.preventDefault()} onDragLeave={() => setDragging(false)} onDrop={drop}><span>↑</span><strong>{uploading ? "업로드 중..." : "엑셀 파일을 놓거나 클릭하세요"}</strong><small>.xlsx · 최대 5MB · 최대 1,000개</small><input ref={fileInput} type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={uploading} onChange={(event) => void upload(event.target.files?.[0])} /></label><div className="platform-upload-help">ID와 비밀번호의 앞자리 0이 유지되도록 두 열을 반드시 <strong>텍스트 형식</strong>으로 작성해주세요.</div>{uploadError && <div className="alert error">{uploadError}</div>}</section>
 
+    {!isAdminScope && <ManualAccountRegistration key={selected} platform={selected} onComplete={async () => { setPage(1); await reload(selected, 1, pageSize); }} onError={(requestError) => handleError(requestError, "플랫폼 계정을 등록하지 못했습니다.")} />}
+
     <section className="management-card platform-account-list"><div className="toolbar platform-list-toolbar"><div><strong>{platformMeta[selected].name} 계정</strong><span className="muted">전체 {pagination.totalItems.toLocaleString()}개</span></div><div className="platform-list-actions"><label>페이지당<select className="page-size-select" value={pageSize} onChange={(event) => { setLoading(true); setPage(1); setPageSize(Number(event.target.value)); }}>{[10, 20, 50, 100].map((size) => <option value={size} key={size}>{size}개</option>)}</select></label><button className="secondary compact" type="button" disabled={loading} onClick={() => { setLoading(true); void reload(selected, page, pageSize).catch((requestError) => setError(handleError(requestError, "새로고침하지 못했습니다."))).finally(() => setLoading(false)); }}>새로고침</button></div></div>{error && <div className="alert error">{error}</div>}{loading ? <div className="platform-account-skeleton" aria-label="플랫폼 계정 목록을 불러오는 중">{Array.from({ length: 5 }, (_, index) => <span key={index} />)}</div> : accounts.length ? <><div className="table-scroll"><table className="platform-account-table"><thead><tr><th>계정 아이디</th><th>등록일</th><th>수정일</th><th>관리</th></tr></thead><tbody>{accounts.map((account) => <tr key={account.id}><td><strong>{account.accountId}</strong></td><td>{koreanDate(account.createdAt)}</td><td>{koreanDate(account.updatedAt)}</td><td><button className="danger compact" type="button" disabled={deleting.has(account.id)} onClick={() => setDeleteTarget(account)}>{deleting.has(account.id) ? "삭제 중..." : "삭제"}</button></td></tr>)}</tbody></table></div><div className="platform-account-mobile">{accounts.map((account) => <article key={account.id}><div><strong>{account.accountId}</strong><small>등록 {koreanDate(account.createdAt)}<br />수정 {koreanDate(account.updatedAt)}</small></div><button className="danger compact" type="button" disabled={deleting.has(account.id)} onClick={() => setDeleteTarget(account)}>삭제</button></article>)}</div></> : <div className="platform-account-empty"><span>{platformMeta[selected].icon}</span><strong>등록된 {platformMeta[selected].name} 계정이 없습니다.</strong><p>엑셀 파일을 업로드해 계정을 등록해 주세요.</p></div>}<div className="platform-pagination"><button className="secondary compact" type="button" disabled={loading || page <= 1} onClick={() => { setLoading(true); setPage((current) => Math.max(1, current - 1)); }}>← 이전</button><span><strong>{pagination.totalPages ? pagination.page : 0}</strong> / {pagination.totalPages} 페이지</span><button className="secondary compact" type="button" disabled={loading || page >= pagination.totalPages} onClick={() => { setLoading(true); setPage((current) => current + 1); }}>다음 →</button></div></section>
 
     {result && <Modal title="엑셀 업로드 완료" onClose={() => setResult(null)}><div className="import-result"><span className={`platform-account-icon ${result.platform}`}>{platformMeta[result.platform].icon}</span><p>총 <strong>{result.totalRows}개</strong> 중 <strong>{result.createdCount}개</strong>를 등록했습니다.<br />중복 계정 {result.skippedDuplicateCount}개는 제외했습니다.</p><button className="primary full" type="button" onClick={() => setResult(null)}>확인</button></div></Modal>}
     {deleteTarget && <Modal title={`${deleteTarget.accountId} 계정을 삭제할까요?`} onClose={() => { if (!deleting.has(deleteTarget.id)) setDeleteTarget(null); }} closeDisabled={deleting.has(deleteTarget.id)}><div className="delete-account-dialog"><p><strong>{deleteTarget.accountId}</strong> 계정을 삭제합니다.<br />삭제한 계정은 복구할 수 없습니다.</p><div className="modal-actions"><button className="secondary" type="button" disabled={deleting.has(deleteTarget.id)} onClick={() => setDeleteTarget(null)}>취소</button><button className="danger" type="button" disabled={deleting.has(deleteTarget.id)} onClick={() => void removeAccount(deleteTarget)}>{deleting.has(deleteTarget.id) ? "삭제 중..." : "삭제"}</button></div></div></Modal>}
     {deleteAllOpen && <Modal title={`${platformMeta[selected].name} 계정을 모두 삭제할까요?`} onClose={closeDeleteAll} closeDisabled={deletingAll}><div className="delete-all-dialog"><div className="delete-all-warning"><span>!</span><p>{isAdminScope ? "관리자가 등록한 전역" : "본인이 등록한"} <strong>{platformMeta[selected].name} 계정 {selectedCount.toLocaleString()}개</strong>가 모두 삭제됩니다.<br />{isAdminScope ? "사용자 개인 계정에는 영향을 주지 않습니다." : "다른 사용자의 계정에는 영향을 주지 않습니다."} 이 작업은 되돌릴 수 없습니다.</p></div><label>확인을 위해 <strong>{platformMeta[selected].name}</strong>을 입력해주세요.<input autoFocus value={deleteConfirmation} disabled={deletingAll} onChange={(event) => setDeleteConfirmation(event.target.value)} placeholder={platformMeta[selected].name} autoComplete="off" /></label><div className="modal-actions"><button className="secondary" type="button" disabled={deletingAll} onClick={closeDeleteAll}>취소</button><button className="danger delete-all-submit" type="button" disabled={deletingAll || deleteConfirmation !== platformMeta[selected].name} onClick={() => void removeAllAccounts()}>{deletingAll && <span className="button-spinner" />}{deletingAll ? "전체 삭제 중..." : "전체 삭제"}</button></div></div></Modal>}
   </main></ProtectedRoute>;
+}
+
+type ManualAccountRow = { key: number; accountId: string; password: string };
+
+function ManualAccountRegistration({ platform, onComplete, onError }: { platform: Platform; onComplete: () => Promise<void>; onError: (error: unknown) => string }) {
+  const { showToast } = useToast();
+  const nextKey = useRef(2);
+  const rowElements = useRef(new Map<number, HTMLDivElement>());
+  const accountInputs = useRef(new Map<number, HTMLInputElement>());
+  const passwordInputs = useRef(new Map<number, HTMLInputElement>());
+  const [rows, setRows] = useState<ManualAccountRow[]>([{ key: 1, accountId: "", password: "" }]);
+  const [submitting, setSubmitting] = useState(false);
+  const [invalidRowKey, setInvalidRowKey] = useState<number | null>(null);
+  const [error, setError] = useState("");
+
+  function addRow() {
+    if (rows.length >= 1000) return showToast("계정은 한 번에 최대 1,000개까지 입력할 수 있습니다.", "error");
+    const key = nextKey.current++;
+    setRows((current) => [...current, { key, accountId: "", password: "" }]);
+    window.setTimeout(() => accountInputs.current.get(key)?.focus(), 0);
+  }
+  function removeRow(key: number) {
+    setRows((current) => current.length === 1 ? [{ key: current[0].key, accountId: "", password: "" }] : current.filter((row) => row.key !== key));
+    if (invalidRowKey === key) setInvalidRowKey(null);
+  }
+  function updateRow(key: number, field: "accountId" | "password", value: string) {
+    setRows((current) => current.map((row) => row.key === key ? { ...row, [field]: value } : row));
+    if (invalidRowKey === key) { setInvalidRowKey(null); setError(""); }
+  }
+  function moveToInvalidRow(row: ManualAccountRow) {
+    setInvalidRowKey(row.key);
+    setError("모든 계정의 아이디와 비밀번호를 입력해주세요.");
+    window.requestAnimationFrame(() => {
+      rowElements.current.get(row.key)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      window.setTimeout(() => (row.accountId.trim() ? passwordInputs : accountInputs).current.get(row.key)?.focus(), 280);
+    });
+  }
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (submitting) return;
+    const invalid = rows.find((row) => !row.accountId.trim() || !row.password);
+    if (invalid) return moveToInvalidRow(invalid);
+    setSubmitting(true); setError("");
+    try {
+      const registered = parseImport(await apiClient<unknown>(`/api/users/me/platform-accounts/${platform}`, { method: "POST", cache: "no-store", body: JSON.stringify({ accounts: rows.map((row) => ({ accountId: row.accountId.trim(), password: row.password })) }) }));
+      await onComplete();
+      setRows([{ key: nextKey.current++, accountId: "", password: "" }]);
+      setInvalidRowKey(null);
+      showToast(registered.skippedDuplicateCount ? `이미 등록된 계정 ${registered.skippedDuplicateCount}개를 제외하고 ${registered.createdCount}개가 등록되었습니다.` : `${platformMeta[registered.platform].name} 계정 ${registered.createdCount}개를 등록했습니다.`, "success");
+    } catch (requestError) { setError(onError(requestError)); }
+    finally { setSubmitting(false); }
+  }
+
+  return <section className="platform-manual-card"><div className="platform-manual-head"><div><span className={`platform-account-icon ${platform}`}>{platformMeta[platform].icon}</span><div><h2>{platformMeta[platform].name} 계정 직접 등록</h2><p>아이디와 비밀번호를 입력해 최대 1,000개까지 한 번에 등록할 수 있습니다.</p></div></div><button className="secondary compact" type="button" disabled={submitting || rows.length >= 1000} onClick={addRow}>+ 계정 행 추가</button></div><form onSubmit={submit}><div className="manual-account-columns" aria-hidden="true"><span>아이디</span><span>비밀번호</span><span>관리</span></div><div className="manual-account-rows">{rows.map((row, index) => <div ref={(element) => { if (element) rowElements.current.set(row.key, element); else rowElements.current.delete(row.key); }} className={`manual-account-row ${invalidRowKey === row.key ? "invalid" : ""}`} key={row.key}><span className="manual-row-number">{index + 1}</span><label><span>아이디</span><input ref={(element) => { if (element) accountInputs.current.set(row.key, element); else accountInputs.current.delete(row.key); }} type="text" value={row.accountId} disabled={submitting} onChange={(event) => updateRow(row.key, "accountId", event.target.value)} autoComplete="off" placeholder="플랫폼 계정 아이디" /></label><label><span>비밀번호</span><input ref={(element) => { if (element) passwordInputs.current.set(row.key, element); else passwordInputs.current.delete(row.key); }} type="password" value={row.password} disabled={submitting} onChange={(event) => updateRow(row.key, "password", event.target.value)} autoComplete="new-password" placeholder="플랫폼 계정 비밀번호" /></label><button className="danger compact" type="button" disabled={submitting} onClick={() => removeRow(row.key)} aria-label={`${index + 1}번 계정 행 삭제`}>삭제</button></div>)}</div>{error && <div className="alert error">{error}</div>}<div className="platform-manual-footer"><span>{rows.length.toLocaleString()} / 1,000개 입력</span><button className="primary" type="submit" disabled={submitting}>{submitting ? <><span className="button-spinner" />등록 중...</> : "전체 등록"}</button></div></form></section>;
 }

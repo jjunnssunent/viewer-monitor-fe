@@ -7,6 +7,7 @@ import { apiClient } from "@/lib/api-client";
 import { formatDate, isExpired, parseServiceUsers, remainingDays } from "@/lib/admin-api";
 import type { ServiceUser } from "@/lib/types";
 import { platforms } from "@/lib/platform-links";
+import { AdminUserPayments } from "@/components/admin-user-payments";
 
 export default function UserDetailPage() {
   const { userId } = useParams<{ userId: string }>(); const [user, setUser] = useState<ServiceUser | null>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState("");
@@ -19,6 +20,7 @@ export default function UserDetailPage() {
     <DetailSection number="02" title="방송 링크 및 관리자 메모"><div className="detail-wide"><span>허용 방송 링크</span><div className="detail-link-list">{platforms.map((platform) => { const link = user.allowedLinks.find((item) => item.platform === platform.id); return <div className="detail-platform-link" key={platform.id}><b>{platform.name}</b>{link ? <a href={link.url} target="_blank" rel="noreferrer">{link.url}</a> : <small>미등록</small>}</div>; })}</div></div><div className="detail-wide"><span>관리자 메모</span><strong>{user.memo || "-"}</strong></div></DetailSection>
     <DetailSection number="03" title="현금영수증 정보"><Info label="휴대폰번호" value={profile?.phoneNumber || "-"} /><Info label="현금영수증번호" value={profile?.cashReceiptNumber || "-"} /></DetailSection>
     <DetailSection number="04" title="세금계산서 정보"><Info label="사업자등록번호" value={profile?.businessRegistrationNumber || "-"} /><Info label="상호명" value={profile?.businessName || "-"} /><Info label="대표자명" value={profile?.representativeName || "-"} /><Info label="업태/종목" value={profile?.businessTypeItem || "-"} /><Info label="사업장주소" value={profile?.businessAddress || "-"} /><Info label="수신메일" value={profile?.billingEmail || "-"} /></DetailSection>
+    <AdminUserPayments userId={user.id} />
   </div></>;
 }
 
